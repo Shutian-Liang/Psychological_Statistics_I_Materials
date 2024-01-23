@@ -1,0 +1,269 @@
+---
+title: "HW9_guide"
+author: "Jialin"
+date: "2023/11/30"
+output:   
+  prettydoc::html_pretty:
+    theme: cayman
+    hightlight: github
+---
+
+```{r}
+knitr::opts_chunk$set(echo = TRUE)
+library(bruceR)
+library(agricolae)
+library(prettydoc)
+library(rstatix)
+library(car)
+```
+
+## Two way ANOVA
+
+$$
+F = \frac{variance(mean\ differences) \ between \ treatments}{variance(mean\ differences)\ expected \ if\ there \ are \ no\ treatment\ effects}
+$$
+
+![](images/方差拆分.png)
+
+![](images/方差拆分2.png)
+
+![](images/Picture1.png){width="709"}
+
+## 例子
+
+研究者想探究不同学习方式(Computer/Paper/iPad)和学习策略(Self-regulated/Fixed)对学业表现(Performance)的影响。
+
+```{r}
+# 本研究的数据
+data <- data.frame(
+  Presentation = rep(rep(c('Paper','Computer','iPad'),2),each=5),
+  Time = rep(c('Self','Fixed'),each = 15),
+  Performance = c(11,8,9,10,7,4,4,8,5,4,10,7,10,6,7,10,6,10,10,9,10,7,10,6,7,10,6,10,10,9))
+```
+
+### 第一步：将总体方差拆分为两部分：组内(Within)和组间(Between)
+
+```{r}
+SS <- function(x){sum((x-mean(x))^2)}
+attach(data)
+## SS_total
+SS_total = SS(Performance)
+df_total = nrow(data)-1
+
+## SS_within
+SS_within = sum(tapply(Performance,list(Presentation,Time),SS))
+df_within = sum(tapply(Performance,list(Presentation,Time),length)-1)
+MS_within = SS_within/df_within
+
+## SS_between
+(groupmean = data %>% 
+  group_by(Presentation,Time) %>% 
+  summarise(M = mean(Performance),n = length(Performance)))
+SS_between = SS(rep(groupmean$M, groupmean$n))
+df_between = nrow(groupmean)-1
+# SS_between = tapply(Performance,list(Presentation,Time),sum)
+# SS_between = sum((SS_between^2)/5) - sum(Performance)^2/length(Performance)
+detach(data)
+```
+
+### 第二步：进一步将组间方差拆分为A的主效应，B的主效应，A与B的交互作用
+
+```{r}
+# Main effect: Presentation
+(Premean = data %>% 
+  group_by(Presentation) %>% 
+  summarise(M = mean(Performance),n = length(Performance)))
+SS_pre = SS(rep(Premean$M, Premean$n))
+df_pre = nrow(Premean)-1
+MS_pre = SS_pre/df_pre
+
+# Main effect: Time
+(Timemean = data %>% 
+  group_by(Time) %>% 
+  summarise(M = mean(Performance),n = length(Performance)))
+SS_time = SS(rep(Timemean$M, Timemean$n))
+df_time = nrow(Timemean)-1
+MS_time = SS_time/df_time
+
+## Interaction: Presentation*Time
+SS_pre_time = SS_between-SS_pre-SS_time
+df_pre_time = df_between-df_pre-df_time #df_pre*df_time
+MS_pre_time = SS_pre_time/df_pre_time
+
+```
+
+### 第三步：构建ANOVA表格，计算F统计量和p值
+
+```{r}
+data.frame(row.names = c('between','Pre','Time','Pre*Time','within','total')) %>%
+  mutate(SS = c(SS_between,SS_pre,SS_time,SS_pre_time,SS_within,SS_total),
+         df = c(df_between,df_pre,df_time,df_pre_time,df_within,df_total),
+         MS = c(NA, MS_pre,MS_time,MS_pre_time,MS_within,NA),
+         F = c(NA,MS_pre/MS_within,MS_time/MS_within,MS_pre_time/MS_within,NA,NA),
+         pvalue = c(NA,1-pf(MS_pre/MS_within,df_pre,df_within),
+                    1-pf(MS_time/MS_within,df_time,df_within),
+                    1-pf(MS_pre_time/MS_within,df_pre_time,df_within),NA,NA),
+         partial_eta_squared = c(NA,SS_pre/(SS_pre+SS_within),
+                                 SS_time/(SS_time+SS_within),
+                                 SS_pre_time/(SS_pre_time+SS_within),NA,NA))
+```
+
+```{r}
+# 一些图形表示
+# 描述一般只需要I或者只需要II
+data %>%
+  group_by(Presentation, Time) %>%
+  summarise(M = mean(Performance), se = sd(Performance)/length(Performance)) %>%
+  ggplot(aes(Presentation, M, fill = Time)) + 
+  geom_bar(stat = 'identity', position = 'dodge',width = 0.8) + 
+  geom_errorbar(aes(ymin = M-se, ymax = M+se),position = 'dodge',width = 0.8) + 
+  ggtitle('Barplot for Interaction I')
+
+data %>%
+  group_by(Presentation, Time) %>%
+  summarise(M = mean(Performance), se = sd(Performance)/length(Performance)) %>%
+  ggplot(aes(Presentation, M,color = Time)) + 
+  geom_point(size = 3) + 
+  geom_line(aes(group = Time),size = 1.5) + 
+  geom_errorbar(aes(ymin = M-se, ymax = M+se),width = 0.3) + 
+  ggtitle('Line graph for Interaction I')
+
+data %>%
+  group_by(Presentation, Time) %>%
+  summarise(M = mean(Performance), se = sd(Performance)/length(Performance)) %>%
+  ggplot(aes(Time, M, fill = Presentation)) + 
+  geom_bar(stat = 'identity', position = 'dodge',width = 0.8) + 
+  geom_errorbar(aes(ymin = M-se, ymax = M+se),position = 'dodge',width = 0.8) + 
+  ggtitle('Barplot for Interaction II')
+
+data %>%
+  group_by(Presentation, Time) %>%
+  summarise(M = mean(Performance), se = sd(Performance)/length(Performance)) %>%
+  ggplot(aes(Time, M,color = Presentation)) + 
+  geom_point(size = 3) + 
+  geom_line(aes(group = Presentation),size = 1.5) + 
+  geom_errorbar(aes(ymin = M-se, ymax = M+se),width = 0.3) + 
+  ggtitle('Line graph for Interaction I')
+```
+
+## A easy way to do Two way ANOVA
+
+### 第一步：双因素方差分析前提假设
+
+### 1. 正态性检验
+
+因变量在每个组内应服从正态分布
+
+### 2. 方差同质性检验
+
+-   **方差同质性检验(Homogeneity of Variance Test)**和**球形度检验(Sphericity Test)**有什么区别？
+
+**方差同质性检验(Homogeneity of Variance Test)**比较的是各处理组间的方差同质性，用于独立样本方差分析
+
+**球形度检验(Sphericity Test)**比较的是各处理组内的协方差同质性，用于重复测量方差分析
+
+### 3. 观测值应该相互独立
+
+```{r}
+#正态性假设(分组检验)
+data %>%
+  group_by(Presentation,Time) %>%
+  summarise(W = shapiro_test(Performance)$statistic,
+            pvalue = shapiro_test(Performance)$p.value)
+
+```
+
+```{r}
+#方差同质性假设（整体检验）
+leveneTest(Performance ~ Time * Presentation, data = data ,center = 'mean')
+#这个和MANOVA一致
+leveneTest(Performance ~ Time * Presentation, data = data,center = 'median')#默认
+```
+
+### 第二步：构建模型
+
+重点观察以下几个结果：
+
+1.  主效应是否显著？
+2.  交互作用是否显著？
+
+```{r 使用aov构建模型}
+model1 <- aov(Performance ~ Time * Presentation, data = data)
+
+#显著性检验
+anova(model1)
+# summary(model1)
+
+#效应量计算（手算见上）
+rstatix::anova_summary(model1)
+partial_eta_squared(model1)
+```
+
+### 第三步：解读结果决定后续检验
+
+-   **区分主效应，简单主效应和交互效应**
+
+1.  主效应(Main effect)：不考虑其他因素存在时，所关注因素不同水平观察结果的差异。
+
+2.  简单主效应(Simple main effect): 指其他因素水平固定时，所关注因素不同水平的效应之差。
+
+3.  交互效应: 是两个或多个因素间的效应互不独立的情形，即一个因素的单独效应随着另外一个(或多个)因素水平的变化而变化。
+
+-   **某一变量的处理效应可能会因交互作用的存在而被掩盖：这提示我们交互作用显著时应该做简单主效应**
+
+![](images/交互作用.png){width="383"}
+
+-   **如何决定做后续检验**
+
+1.  若主效应显著，可以根据估计边际均值（Estimated Marginal Means，简称EMMEANS)进一步了解不同水平之间的差异情况，并结合实际背景进行解释。
+    -   估计边际均值：所有其他因素不变的情况下，一个特定因素对某个变量的影响所导致的均值
+2.  若交互作用显著，则需要做简单主效应分析（可理解为退化为单因素ANOVA)
+    -   **固定**变量A的某一水平，观察变量B不同水平之间的差异（B的简单主效应）
+3.  若简单主效应显著，则继续做事后检验(Tukey HSD, Bonferroni, Scheffe)
+
+```{r}
+#直接用HSD矫正
+TukeyHSD(model1)
+#TukeyHSD(model1,which = 'Time')
+#TukeyHSD(model1,which = 'Presentation')
+#TukeyHSD(model1,which = 'Time:Presentation')
+
+#bonferroni和scheffe的实现
+require(agricolae)
+# scheffe.test(model1,trt = c('Time','Presentation'),console = T)
+# LSD.test(model1, trt = 'Time',p.adj = 'none',console = T)
+LSD.test(model1, trt = 'Time',p.adj = 'bonferroni',console = T)
+```
+
+```{r}
+require(emmeans)
+(emms1 <-emmeans(model1, ~Time|Presentation))
+emmip(model1, Time~Presentation)
+
+(emms2 <-emmeans(model1, ~Presentation|Time)) 
+emmip(model1, Presentation~Time)
+```
+
+### bruceR
+
+```{r}
+model2 <- MANOVA(data = data,
+       dv = 'Performance',
+       between = c('Presentation','Time')) # %>%
+  # EMMEANS(effect = 'Presentation')
+```
+
+```{r}
+model2 %>% 
+  # EMMEANS(effect = 'Time') %>% #如果Time变量的条件超过2组
+  # EMMEANS(effect = 'Presentation') %>% #如果Presentation变量的条件超过两组
+  # EMMEANS(effect = "Time", by = "Presentation") #%>% #固定Presentation，比较Time
+  EMMEANS(effect = "Presentation", by = "Time")  #固定Time，比较Presentation
+#注意：一定要根据显著性结果来决定做哪些检验，不要（像上面的例子一样）一股脑全做了
+```
+
+关于Sum of Square的补充内容：
+
+<https://md.psych.bio.uni-goettingen.de/mv/unit/lm_cat/lm_cat_unbal_ss_explained.html>
+
+[用回归来理解方差分析（三）：Ⅰ型平方和与Ⅲ型平方和 - 知乎 (zhihu.com)](https://zhuanlan.zhihu.com/p/130252140)

@@ -1,0 +1,39 @@
+---
+title: "R语言基础"
+author: "shutian"
+date: "2023/10/08"
+output:   
+  prettydoc::html_pretty:
+    theme: cayman
+    hightlight: github
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+------------------------------------------------------------------------
+# 变量的命名
+```{r}
+a = c(1,2,3)
+b = 1
+```
+
+# 数据的读取
+```{r}
+library(readxl)
+data = read_excel("data.xlsx")
+score = data$score
+```
+
+# 向量的操作
+```{r}
+print(mean(score))
+print(median(score))
+```
+
+# 向量的计算
+```{r}
+
+```
+

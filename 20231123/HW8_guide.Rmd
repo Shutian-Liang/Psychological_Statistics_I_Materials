@@ -1,0 +1,250 @@
+---
+title: "anova讲义"
+author: "Shutian"
+date: "2023/11/21"
+output:   
+  prettydoc::html_pretty:
+    theme: cayman
+    hightlight: github
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(car)
+library(bruceR)   #安装请运行：install.packages("bruceR", dep=TRUE)
+library(rstatix)  #anova事后检验
+library(tidyverse) #ggplot画图和dplyr的%>%
+```
+
+## 方差分析(Analysis of Variance,ANOVA)概览
+
+1.  单因素方差分析(one-way ANOVA)
+2.  重复测量方差分析(repeated-measures ANOVA)
+3.  双因素方差分析(two-way ANOVA)
+4.  混合设计方差分析(mixed ANOVA) 以上四种方法是本学期会用到的方差分析的方法，也是在心理学科研中比较常见的统计方法。本次作业仅仅涉及到前两种anova的方法，后面两种方法会在老师讲过这些方法后和大家进行介绍。另外，本讲义更多关注如何实现这些方法，有关细节的数学原理，可以更多参考老师上课的ppt。
+
+### 单因素方差分析(one-way ANOVA)
+
+(a)适用条件：指的是考察单一因素的影响，此单一因素至少有三个水平，且不同水平分别作用于不同样本(可以看做是独立样本t检验的拓展版本，独立样本t检验只有两个样本)\
+例子：随机选择三组被试，分别查看在开车时不进行通话、开车时使用蓝牙耳机通话、开车时手拿手机通话此三种因素对驾驶水平的影响\
+
+(b)前提假设：\
+(i)在每个条件内进行的观察结果都是独立的\
+(ii)在每个条件下的观测值的分布都是正态分布\
+(iii)在每个条件下的观测值的分布应该满足方差齐性\
+
+(c)实现方法：\
+一般来说，anova实现可以使用r自带的统计包，不过新开发的bruceR包非常好用，但是机房的电脑好像使用不了bruceR包，这一点有点可惜。现在不确定最后期末考试的形式，大家在完成作业时，可以分别尝试使用不同的方法(如果最终能在期末考试使用bruceR包)，还是bruceR更方便实现。最后，大家在之后实心实验直接用bruceR做分析就好了。\
+
+```{r}
+# 读取数据
+load('oneway.Rdata')
+```
+
+#### 前提假设检验
+
+```{r one-way anova 前提假设验证}
+# 利用shapiro_test检验每个条件下的分布都是正态分布(假设2)
+oneway_data %>%
+  group_by(condition) %>%
+  shapiro_test(performance)
+
+# 当然你也可以这样写,然后分别去提取三次不同的condition，但是有点繁琐，建议利用上面的方式
+free_p <- oneway_data[oneway_data$condition=='handsfree','performance']
+shapiro_test(free_p)
+
+# car包的Levenes Test 检验方差齐性(假设3，推荐使用)
+leveneTest(performance~condition,data = oneway_data,center='mean')
+
+# 利用bartlett.test 检验方差齐性(假设3)
+bartlett.test(performance~condition, data = oneway_data)
+```
+
+对以上结果的解读： (1)一般来说，对于levene's Test,汇报方式和independent t test一致，直接报告df、F以及p值就可以，这里注意p\>0.05认为是方差齐性\
+(2)对于shapiro_test，其p\>0.05认为不同条件下均满足正态性假设。\
+思考：如果方差不齐性怎么办？
+
+#### 具体实现
+
+```{r one-way anova的实现(采用常规统计包)}
+# method1 使用summary()和aov()函数
+res_aov <- aov(performance~condition,data = oneway_data)  # 假定方差齐性
+summary(res_aov)
+#anova_summary(res_aov)
+print('-------------------------------------------------')
+
+
+# method2 直接使用oneway.test()函数：
+oneway.test(performance~condition,
+  data = oneway_data,
+  var.equal = TRUE    # 假定方差齐性，不齐时改成FALSE即可
+)
+```
+
+**如何报告：使用单变量方差分析，**$F(2,57)=58.18,p<.001$\
+以上结果表明，p值小于0.05，说明**至少有两组之间的均值存在显著性差异**，接下来我们想看的一件事是，到底哪两组之间的均值存在显著性差异('nophone' VS. 'handsfree','nophone' VS. 'handsheld','handsfree' VS. 'handsheld')，因此需要我们进行事后检验(post-hoc test)
+
+#### 事后检验(post-hoc test)
+
+为了研究所有组别两两之间是否具有差异，我们需要对所有组进行两两比较。因为我们是比较两组，理论上可以通过3个t-test来进行比较，在这种情况下t-test也是比较精确的；然而如果比较所有的组别，比较的次数也会随之剧增，这样会导致以下问题出现： - 检验过程繁琐 - 无统一的试验误差，误差估计的精确性和检验的灵敏度低 - 推断的可靠性降低，犯α错误的概率增加 也会有一些特殊的检验方法，这里介绍两种常见的方法： 1. Tukey HSD test 用以比较多组之间的差异，同时也返回了显著性，不过建议报告时采用Tukey HSD的数值差异(diff)，汇报bonferroni的p值
+
+2.  Bonferroni correction 对事后检验进行了校正，因此其检验结果更稳健，为了达到"疑罪从无"的标准，采用更稳健的方法才是我们所需要的，因此最好汇报bonferroni的检验的p值
+
+```{r 事后检验}
+# Tukey Test
+TukeyHSD(res_aov)
+print('--------------------------------------------')
+
+# Bonferroni Test
+pairwise_t_test(data = oneway_data,performance~condition,paired = F,p.adj = "bonf")
+
+```
+
+#### BruceR包直接实现，一步到位
+
+安装请在console里运行这段代码：`install.packages("bruceR", dep=TRUE)`\
+有关bruceR的参考网站：<https://psychbruce.github.io/bruceR/>\
+有关bruceR的中文网站：<https://zhuanlan.zhihu.com/p/281150493>
+
+```{r one-way anova的实现(采用bruceR包)}
+# 有关bruceR包的MANOVA的介绍
+#MANOVA(
+    #data：数据框（可以是宽数据，也可以是长数据；函数内部都会自动转换成长数据，然后调用afex包的aov_ez()函数进行ANOVA分析）
+    #subID：如果data是长数据（重复测量ANOVA），则必须定义ID变量，因为长数据里面一个被试占多行
+    #dv：如果是被试间ANOVA或长数据的重复测量ANOVA，则需要定义单个因变量
+    #dvs：如果是宽数据的重复测量ANOVA，则需要定义多个因变量（重复测量），可以是变量范围，如dvs="A1B1:A2B3"
+    #dvs.pattern：如果使用了dvs参数，则必须定义变量名的命名规律，比如dvs.pattern="A(.)B(.)"会自动提取"A1B1"、"A1B2"……中的数字作为因素水平；这里需要学习“正则表达式”的用法
+    #between：被试间因素的名称
+    #within：被试内因素的名称
+    #covariate：协变量的名称
+    #ss.type：平方和（SS）的计算方法，默认是"III"型SS，还可以是"II"型SS
+    #sph.correction：重复测量ANOVA中，违背球形假设后的校正方法，默认是"none"，可选择"GG"（Greenhouse-Geisser）或"HF"（Huynh-Feldt）
+    #digits：保留的小数位数，默认是2位小数)
+
+#常常配合EMMEANS进行管道操作符%>%使用
+#EMMEANS(
+    #model：由MANOVA()函数返回的对象，一般配合管道操作符%>%使用，可叠加多个EMMEANS()分析（无限套娃）
+    #effect：待检验的“简单主效应”（如果输入多个，还会报告“简单交互作用”和“简单简单效应”）
+    #by：简单效应检验中的“调节变量”（也可以输入多个，则检验“简单简单效应”）
+    #contrast：比较方法，默认是"pairwise"，可选择"seq"、"poly"等
+    #reverse：是否比较“高 vs. 低”而不是“低 vs. 高”？默认是TRUE
+    #p.adjust：p值的多重比较校正方法，默认是"bonferroni"，可选择"none"、"fdr"、"hochberg"、"hommel"、"holm"、"tukey"、"mvt"、"dunnettx"、"sidak"、"scheffe"、"bonferroni"
+    #sd.pooled：计算Cohen's d时依据的混合标准差，默认使用“误差均方根”（RMSE）作为混合标准差 
+    #digits：保留的小数位数，默认是2位小数) 
+
+# 采用MANOVA结合EMMEANS进行anova检验，一步到位
+MANOVA(oneway_data,dv='performance',between = 'condition')%>%EMMEANS(effect = 'condition',p.adjust = 'bonf')
+#res <- MANOVA(oneway_data,dv='performance',between = 'condition')
+#EMMEANS(res,effect = 'condition',p.adjust = 'bonf')
+
+#bruceR做了的
+# 分子描述性统计
+# anova table计算
+# 显著性水平
+# effect size计算
+# 方差同质性检验
+# 事后检验
+
+#bruceR没有做的
+# 画图
+# 正态性检验
+# 临界值确定
+```
+
+
+#### 绘图显示结果
+```{r draw a picture 不要求掌握}
+require(tidyverse)
+oneway_data %>%
+  dplyr::group_by(condition) %>%
+  dplyr::summarise(M = mean(performance), SE = sd(performance)/sqrt(length(performance)))%>%
+  ggplot(aes(x = condition,y = M, fill = condition)) + 
+  geom_bar(stat = 'identity',width = 0.8) + 
+  geom_errorbar(aes(ymin = M-SE,ymax = M+SE,width = 0.5)) +
+  ggtitle("Driving Performance of different conditions") +
+  xlab("Different phone using conditions") +
+  ylab("Driving performance") + 
+  theme(plot.title = element_text(color="red", size=14, face="bold"),
+        axis.title.x = element_text(color="blue", size=14, face="bold"),
+        axis.title.y = element_text(color="#993333", size=14, face="bold"))+
+  labs(fill="Treated")
+```
+
+### 重复测量方差分析(repeated measures ANOVA)
+(a)适用条件：指的是考察不同因素(或时间信息)对同一组被试的影响，要求至少存在三个不同因素(或时间信息)(可以看做是配对样本t检验的拓展版本，配对样本t检验只有两个条件)\
+例子：(1)考察无分心干扰、视觉分心干扰、听觉分心干扰对同一组被试视觉检测能力的影响(施加了实验效应，Experimental study)\
+(2)考察不同时间点下(治疗前，治疗后一个月、治疗后一年)对同一组被试健康水平的影响(Non-experimental study)\
+
+
+(b)前提假设：\
+首先是anova的三个基本假设外：
+(i)在每个条件内进行的观察结果都是独立的\
+(ii)在每个条件下的观测值的分布都是正态分布\
+(iii)在每个条件下的观测值的分布应该满足方差齐性\
+
+除此之外，repeated-measures anova还具有自己独特的假设：
+(iV)协方差同质性(homogeneity of covariance)：具体原理可以不用特别了解\
+
+(c)实现方法：\
+```{r}
+load('repeated.RData')
+repeated_data %>%
+  dplyr::group_by(time) %>%
+  dplyr::summarise(M = mean(health), SE = sd(health)/sqrt(length(health)))%>%
+  ggplot(aes(x = time,y = M, fill = time)) + 
+  geom_bar(stat = 'identity',width = 0.8) + 
+  geom_errorbar(aes(ymin = M-SE,ymax = M+SE,width = 0.5)) + 
+  scale_x_discrete(breaks = c('pre','1_month','half_year'))+
+  ylab("health level")
+```
+
+#### repeated-anova 前提检验
+```{r}
+# 前三个同上，下面进行(iv)协方差同质性检验,这里不需要验证方差同质
+
+# 需要先转变一下形式
+require(reshape2)
+data3 <- dcast(repeated_data,id~time)
+
+# 采用mauchly 球形度检验
+mlmfit <- lm(as.matrix(data3[,-1])~1) 
+mauchly.test(mlmfit,X = ~1) #和levenTest一样，知道是干什么就够了，不需要了解原理
+```
+if p > 0.05, 认为满足协方差同质性假设(报告的时候需要W，p)\
+
+#### repeated-measures anova 实现
+```{r repeated-measures anova实现}
+# method 1 aov函数
+result <- aov(health~time+Error(id/time),data = repeated_data)
+summary(result)
+# 提取效应量
+anova_summary(result)   #rstatix包的
+print('----------------------------------------------------------------------------------')
+
+
+# method 2 anova_test函数
+res.aov <- anova_test(data = repeated_data, dv = health, wid = id, within = time)
+get_anova_table(res.aov)
+```
+between treatments: time row;\
+within treatments: id Residuals+id:time Residuals\
+between subjects: id Residuals\
+error: id:time Residuals\
+
+#### 事后检验
+```{r}
+#使用rstatix库中的pairwise_t_test函数，读取p.adj结果
+pwc <- pairwise_t_test(data = repeated_data, health ~ time, paired = T, p.adjust.method = "bonf")
+pwc
+
+```
+
+#### BruceR直接检验
+```{r}
+# method 3 
+res <- MANOVA(repeated_data,dv='health',within = 'time',subID = 'id')
+EMMEANS(res,effect = 'time',p.adjust = 'bonf')
+```
+
+
+

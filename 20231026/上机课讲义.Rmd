@@ -1,0 +1,940 @@
+---
+title: "上机课讲义"
+author: "张旭阳"
+date: "2023/10/11"
+output:
+    prettydoc::html_pretty:
+    theme: cayman
+    hightlight: github
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+#### 关于Markdown
+白色的区域是文本区域，可以使用大部分markdown的语法生成文本、公式
+$\overline X = \sum_{i=1}^{n}X_i$、表格等\
+一些其他技巧：**加粗**，*斜体*，~~删除~~, 大家也可以自己探索\
+写好后的Rmarkdown文件可以Knit输出为不同格式的文件，在output处改成html_document, doc_document\
+这里用的代码可以让输出出来的html文件看上去比较好看（好像需要下载一些包rmarkdown,prettydoc）之类的\
+    prettydoc::html_pretty:
+    theme: cayman
+    hightlight: github\
+最后跟大家分享一下我觉得好用的html输出为pdf的方法，比较美观也比较方便。
+
+#### 我自己R语言入门的一些参考资料：
+- 《R语言实战(R in Action)》：经典中的经典
+- 《R数据科学(R for data science)》：使用tidyverse进行数据处理
+- 《ggplot2: Elegant Graphics for Data Analysis》：使用ggplot2包进行优雅的绘图
+- 知乎《bruceR：数据分析的三头六臂》：bruceR包完成常见的统计任务
+
+#### 实用快捷键
+- 定义变量（<-）: Alt/Option + -
+- 插入管道操作符（%>%）：Ctrl/Command + Shift + M （使用频率高）
+- 运行当前行/选择的代码：Ctrl/Command + Enter （使用频率高）
+- 运行当前段落/块：Ctrl/Command + Shift + Enter
+- 自动补齐：tab
+- Console中显示之前或者之后的代码：上下
+
+
+---
+
+## 第一次课
+```{r 生成数据}
+c(1,2,3)
+a <- c(1,2,3)
+b <- c(TRUE, FALSE,TRUE)
+c <- c('x','y','z')
+
+```
+
+```{r 读取数据}
+#清空console，清空环境
+library(readxl)  #这里注意library每次在文档开头都需要调用，但是install.packages只需要在console运行一次
+data <- read_excel('hw1_data.xlsx')
+data # 是一个数据框
+score <- data$score #这个才是一个变量
+
+save(data,score,file = 'hw1_data.Rdata') #存储数据方便下次再用
+load('hw1_data.Rdata') #再使用的时候又可以调用
+```
+
+
+```{r 把用到的包放在最上面}
+library(readxl)  #读excel
+library(prettyR) #求众数
+library(tidyverse) #我个人最喜欢的数据处理包
+```
+
+```{r 基本的描述性统计1}
+length(score) #样本量
+mean(score) #平均数
+sum(score)/length(score) #用定义算平均数
+
+median(score) #中位数
+quantile(score, 0.5) #另一种计算中位数的方法
+#psych::interp.median提供了精确中位数的计算
+
+library(prettyR)
+Mode(score) #prettyR::Mode算众数
+sort(table(score), decreasing = TRUE) #个人建议最全面的找全众数
+
+```
+
+
+```{r 关于一点点格式化输出, echo = FALSE}
+M = mean(score)
+M
+round(score, digits = 2)
+sprintf('成绩的均值是%.3f', M) #不是必须掌握的
+?sprintf
+```
+
+
+```{r 基本的描述性统计2}
+sort(score) #从小到大排序
+sort(score, decreasing = FALSE) # 从大到小排序
+max(score) #最大值
+min(score) #最小值
+max(score)-min(score)
+range(score) #最大值和最小值
+diff(range(score)) #全距
+#R计算的全距都是不考虑精确上下限的！
+#精确上下限比较重要
+```
+
+```{r 描述性统计3}
+IQR(score) #四分位距离interquantile range
+quantile(score,0.75) - quantile(score,0.25) #按照定义计算四分位距
+
+var_s <- var(score) #样本方差
+sd(score) #样本标准差
+
+var_p <- sum((score - mean(score))^2)/length(score) #总体标准差
+var_p * length(score) / (length(score)-1) == var_s
+
+summary(score)
+quantile(score)
+```
+
+
+```{r 命名型变量和顺序型变量}
+(mycolors_raw = c('red','blue','green','green'))
+mycolors <- factor(mycolors_raw)
+factor(mycolors_raw, levels = c('red','green','blue'),labels = c('R','G','B'))
+
+summary(mycolors)
+table(mycolors)
+
+
+```
+
+```{r 连续型变量转化成离散变量}
+cut(score, breaks = c(30,40,50,60,70,80,90,100),
+    right = FALSE)
+?cut
+rank_score <- cut(score,
+    breaks = c(0,60,72,85,100),
+    labels = c("F","C","B","A"),
+    right = FALSE,
+    ordered_result = TRUE)
+rank_score
+table(rank_score)
+prop.table(table(rank_score))
+```
+
+```{r 饼图的绘制}
+?pie
+tab = table(rank_score)
+pie(tab,
+    labels = tab,
+    col = rainbow(4))
+legend('topright',names(tab),fill = rainbow(4))
+```
+
+
+```{r 直方图的绘制}
+library(showtext)
+font_add("Heiti TC Light", regular = "STHeiti Light.ttc")
+showtext.auto()  #这段代码可以保证中文录入准确
+
+
+mybreaks = seq(from = 30, to = 100, by = 5)
+hist(rnorm(100))
+hist(score, 
+     breaks = mybreaks,
+     col = rainbow(40),
+     freq = TRUE,
+     right = FALSE, #很重要的参数
+     main = '分数的分布',
+     xlab = '分数',
+     ylab = '频数',
+     ylim = c(0,18),
+     labels = TRUE)
+```
+
+
+___
+
+## 第二次课
+
+（补充内容）首先再讲讲三门问题，想要理解这个问题是贝叶斯学派的概率估计，和频率学派的理解作区分
+问题描述：（1）ABC三扇门后有一扇门背后有奖励，（2）参与者选择A门，（3）从未选择的BC两个门中没有奖品的随机打开一扇，（4）主持人打开的是C。求A和B门背后有奖品的后验概率，即P(A有奖品|打开C)：
+
+- 先验概率：P(A有奖品) = P(B有奖品) = P(C有奖品)
+- P(C有奖品，打开C)= P(C有奖品)·P(打开C|C有奖品) = 0；
+- P(B有奖品，打开C)= P(B有奖品)·P(打开C|B有奖品) = 1/3·1 = 1/3，主持人只能打开C，不能打开B；
+- P(A有奖品，打开C)= P(A有奖品)·P(打开C|A有奖品) = 1/3·1/2 = 1/6，因为主持人可能打开B也可能打开C；
+- P(A有奖品|打开C) = P(A有奖品，打开C)/(P(A有奖品，打开C)+P(B有奖品，打开C)+P(B有奖品，打开C)) = 1/3。
+
+
+```{r z分数和标准化}
+#总体的z分数
+IQ = round(runif(10, 75, 125)) #10个人的智商数据
+
+#样本的标准化
+(IQ - mean(IQ))/sd(IQ)
+as.numeric(scale(IQ))
+?scale
+
+#z分数
+(z_IQ = (IQ - 100)/15)
+mean(z_IQ)
+sd(z_IQ)
+IQ_copy = 100 + 15 * z_IQ
+
+```
+
+```{r 一个example}
+library(tidyverse)
+report <- data.frame(
+  name = c('jia','yi','bing','ding','wu'),
+  chinese = c(82,70,56,90,87),
+  maths = c(456,345,654,478,346),
+  english = c(17,19,10,18,19))
+report %>% mutate(total = chinese + maths + english) %>% 
+  arrange(total) %>% 
+  mutate(z_chinese = scale(chinese),
+         z_maths = scale(maths),
+         z_english = scale(english),
+         z_total = z_chinese + z_maths + z_english) %>% 
+  select(name,chinese,maths,english,total,z_total) %>% 
+  arrange(z_total)
+
+```
+
+
+#### 离散型随机变量的例子
+```{r 通过分布列计算期望和方差}
+Num_of_npy <- 0:6 #c(0,1,2,3,4,5,6)
+Prob <-  c(0.129, 0.264, 0.271, 0.185, 0.095, 0.039, 0.017)
+mydata <- data.frame(X = Num_of_npy, Pr = Prob)
+mydata
+
+#Probability Mass Function
+barplot(Prob) #比较朴素
+barplot(Prob, 
+        space = 0, #不加这个参数画出来的有空格
+        names.arg = Num_of_npy, #一些稍显精致的参数
+        main = 'PMF for Number of boyfriends/girlfriends',
+        xlab = 'Number of npy',
+        ylab = 'Probability',
+        ylim = c(0,0.3)) 
+```
+
+
+```{r}
+#求期望！
+X <- Num_of_npy
+Pr <- Prob
+
+E_X <- sum(X * Pr)
+E_X
+
+#求方差和标准差！
+Var_X <- sum((X-E_X)^2 * Pr) #应当注意，这个是总体方差
+SD_X <- sqrt(Var_X)
+Var_X_alter <- sum(X^2*Pr) - E_X^2
+Var_X
+Var_X_alter
+#概率质量(PMF)和累积概率(CDF)的转换
+#PMF:Pr(X=a) = Pr(X<=a)-Pr(X<=a-1)
+#CDF:Pr(X<=a)
+
+(Cum_Prob <- cumsum(Prob))
+(Prob_copy <- diff(Cum_Prob)) #不是特别完整
+
+#在画一个CDF图像
+barplot(Cum_Prob, 
+        space = 0, #不加这个参数画出来的有空格
+        names.arg = Num_of_npy, #一些稍显精致的参数
+        main = 'CDF for Number of boyfriends/girlfriends',
+        xlab = 'Number of npy',
+        ylab = 'Probability',
+        ylim = c(0,1)) 
+```
+
+#### 二项分布
+了解并使用rbinom，dbinom，pbinom，qbinom
+
+r + 分布名称 （n表示长度，paras表示分布的参数）
+```{r 生成}
+#假装我们在抛硬币
+rbinom(n = 10, size = 1, p = 0.5) #10个Binomial(1,0.5)
+rbinom(n = 1, size = 10, p = 0.5) #1个Binomial(10,0.5)
+#假装我们在投骰子
+sample(1:6, size = 10, replace = TRUE)
+```
+
+
+d + 分布名称 （x表示取值，paras表示分布的参数）
+对于离散型变量就是求PMF的值，对于连续型就是求PDF
+
+p + 分布名称 （x表示取值，paras表示分布的参数）
+对于离散型变量和连续型变量都是求CDF
+
+$$Pr(X=1) = \frac{3!}{1!2!}(\frac16)^1(\frac56)^2$$
+```{r 算一些概率}
+#投掷3枚骰子，1朝上概率是1/6，X表示1朝上的次数，Binomial(3,1/6)
+N = 3
+p = 1/6
+mydata <- data.frame(num = 0:N, pmf = dbinom(0:N, N, p), cdf = pbinom(0:N, N, p))
+
+#投掷3个骰子，恰好1个是数字1朝上
+dbinom(1,N,p)
+factorial(N)/factorial(1)/factorial(N-1)*(p)^1*(1-p)^2
+
+#投掷3个骰子，不超过（小于等于）1个是数字1朝上
+dbinom(0,N,p) + dbinom(1,N,p)
+pbinom(1,N,p)
+
+#期望：
+mydata
+attach(mydata) #解释一下这里
+(E_X = sum(num*pmf))
+N*p
+
+#方差：
+(Var_X = sum(num ^ 2 * pmf) - E_X ^ 2)
+N*p*(1-p)
+detach(mydata)
+
+#标准差：
+```
+
+```{r 不是很重要}
+#投掷20个骰子，数字1朝上次数的分布列(理论值)
+n = 20
+p = 1/6
+df <- (data.frame(num = 0:n, pmf = dbinom(0:n, n, p), cdf = pbinom(0:n, n, p)))
+
+#理论和经验PMF
+barplot(df$pmf, width = 1, space = 0, 
+        names.arg = c(0:20), cex.names = 0.5, ylim = c(0,0.25),
+        main = 'PMF for B(20,1/6)', xlab = 'N', ylab = 'Pr') #理论值
+samp <- rbinom(1000,n,p) #抽样1000次
+r <- hist(samp, breaks = c(0:21-0.5),plot = F) #经验数据
+lines(r$breaks[2:22], r$density,type = 'b', col = 'red')
+#之后卡方检验会交大家判断这组样本是否来自这样的总体
+```
+
+```{r 不是很重要}
+#理论和经验CDF
+barplot(df$cdf, width = 1, space = 0,
+        names.arg = c(0:20),cex.names = 0.5,
+        main = 'CDF for B(20,1/6)',xlab = 'N', ylab = 'Pr')
+
+samp <- rbinom(1000,n,p)
+ebinom <- ecdf(samp)
+lines(0:n+0.5,ebinom(0:n),type = 'b',col = 'red')
+```
+
+
+#### 正态分布（上）
+
+上机课重点将标准正态分布N(0,1)，rdpq
+
+```{r}
+##标准正态分布
+#N(0,1)表示均值为0，标准差(思考：是sigma还是s)为1的正态分布
+rnorm(1)
+rnorm(1, mean = 100, sd = 15) #生成1个随机数
+x_range = seq(-3,3,0.01)
+```
+
+$$f(x) = \frac{1}{\sqrt{2\pi}}e^{-x^2/2}$$
+```{r PDF演示}
+dnorm(2) #f(x) = 1/sqrt(2*pi) * exp(-x^2/2)
+dnorm_demo <- function(x, n = 3){
+  x_range = seq(-n,n,0.01)
+  plot(x_range,dnorm(x_range),type = 'l', ylab = 'Pr',
+     main = 'PDF of Standard Normal Distribution\n(PDF=Probability Density Function)')
+  points(x,dnorm(x),col = 'red', pch = 16, cex = 3)
+  legend('topright',sprintf('PDF: f(%.1f) = %.3f', x,dnorm(x)), text.col = 'red')
+}
+dnorm_demo(0)
+
+# 比较有用
+x_range = seq(-3,3,0.01)
+plot(x_range,pnorm(x_range),type = 'l', ylab = 'Pr',
+     main = 'PDF of Standard Normal Distribution\n(PDF=Probability Density Function)')
+
+```
+
+```{r CDF演示}
+##一个演示正态分布的样例
+#注意，这个函数是自己编写的，而不是可以直接使用的
+norm_st <- function(a = -Inf,b = Inf, lim = 3, digits = 3,col = 'lightgreen'){
+  p = pnorm(b)-pnorm(a)
+  x = seq(-lim,lim,by = 0.01)
+  main = paste('P (',round(a,digits),'< z <',round(b,3),') =',round(p,digits))
+  plot(x,dnorm(x),type = 'l', main = main,lwd = 2)
+  seg = seq(max(-lim,a),min(lim,b),by = 0.01)
+  segments(seg,0,seg,dnorm(seg)-0.003,col = col)
+}
+
+norm_st(b = 1.645)
+pnorm(1.645) #P(z<1.645)
+
+norm_st(b = -1.645,col = 'red')
+pnorm(-1.645) #P(z<-1.645)
+
+norm_st(a = -1.645,col = 'grey')
+1- pnorm(-1.645) #P(z>-1.645)
+
+norm_st(a = 0,b = 1.645, col = 'lightblue')
+pnorm(1.645) - pnorm(0) #P(0<z<1.645)
+```
+
+
+正态分布条件下：z分数和概率值是一一对应的
+z =-1.96, F = 0.025
+z = 0, F = 0.5
+z = 1.96, F = 0.975
+
+```{r}
+pnorm(c(-2,0,2))
+x = seq(-3,3,0.01)
+plot(x,pnorm(x),type = 'l',
+     main = 'CDF of Standard Norm Distribution\n(CDF=Cumulative Distribution Function)')
+points(c(1.96,0,-1.96),c(0.975,0.5,0.025), pch = 16, col = "blue")
+text(c(1.96,1,-1.96),c(0.875,0.5,0.125), col = 'blue',
+     label =c('(1.96,0.975)','(0,0.5)','(-1.96,0.025)'))
+
+qnorm(0.975) #使得P(z<a)=0.975的a，pnorm的反函数
+norm_st(b = qnorm(0.975))
+```
+#### 正态分布近似二项分布
+现实中没啥用，但是综合性强，是考试的重点
+
+
+#### 正态分布近似
+
+```{r}
+#B(600,0.4)
+N = 600
+p = 0.4
+(mu = N * p)
+(var = N * p * (1-p))
+(sd = sqrt(N*p*(1-p)))
+
+pbinom(240, N, p)  #Pr(X<=240)
+pnorm(240, mu, sd)  #这个是错的
+pnorm(240.5, mu, sd) #这个是对的
+
+#思考一下Pr(X>=240) [239.5,+Inf); Pr(X>240) [240.5, +Inf]
+
+
+
+dbinom(240, N, p) #Pr(X=240)
+pnorm(240.5, mu, sd) - pnorm(239.5, mu, sd)
+dnorm(240, mu, sd)
+
+
+```
+
+
+```{r}
+#创建一个函数
+norm_binom <- function(n,p, samplesize = 1e6, col= 'blue'){
+  samp <- rbinom(samplesize,n,p)
+  hist(samp, breaks = c(0:(n+1)-0.5), freq = F,
+       main = paste('Normal approximation for B (',n,',',round(p,2),' )'))
+  mu = n*p
+  sd = sqrt(n*p*(1-p))
+  x = seq(-1,n+1,by= 0.1)
+  lines(x, dnorm(x,mu,sd), col =col)
+}
+
+norm_binom(5,0.2)
+norm_binom(20,0.2)
+norm_binom(50,0.2)
+
+norm_binom2 <- function(n, p, samplesize = 1e6, col = 'blue'){
+  barplot(dbinom(0:n,n,p), width = 1, space = 0, 
+        names.arg = c(0:n), cex.names = 1,
+        main = paste('Normal approximation for B (',n,',',round(p,2),' )'))
+  mu = n*p
+  sd = sqrt(n*p*(1-p))
+  x = seq(-1,n+1,by= 0.1)
+  lines(x+0.5, dnorm(x,mu,sd), col =col)
+}
+norm_binom2(50,0.5)
+```
+
+___
+
+
+___
+
+## 第三次课
+### 正态分布（下）
+#### PDF和CDF
+
+首先回答一个问题，连续型随机变量的PDF和CDF是什么东西？\
+不同于离散型随机变量，我们先定义PMF，再根据PMF累加求和定义CDF。\
+连续型随机变量我们先定义CDF，再根据CDF求导确定PDF。\
+离散型随机变量和连续型随机变量的CDF定义是相同的$$F(a) = Pr(X\leq a)$$
+分布函数：（1）定义在整个数轴上；（2）取值[0,1]；（3）单调不减。\
+但是不同的变量的CDF是不一样的：
+```{r CDF图像的演示}
+#Binomial(16,0.5)的图像
+N = 16
+p = 0.5
+
+X1 = 0:N
+F1 = pbinom(X1, N, p)
+plot(X1, F1, 'S', col = 'red', ylab = 'Probability')
+
+#Normal(8,4)的图像
+X2 = seq(0, N, 0.1)
+F2 = pnorm(X2, N*p, sqrt(N*p*(1-p)))
+lines(X2, F2, col = 'blue')
+lines(X2-0.5, F2, col = 'green')
+
+legend('bottomright',c('binomial', 'normal', 'normal_cor'), fill = c('red','blue','green'))
+```
+连续型随机变量CDF的特性，CDF图像连续(右侧导数存在)，这也是为什么叫连续型随机变量。\
+伴随而来的是PDF函数的定义$$f(a) = \lim\limits_{t\to0+}\frac{F(a+t)-F(a)}{t}$$
+在非特殊情况下，我们可以认为f(a)是F(a)在a处的导数(图像的斜率)。\
+反过来根据牛顿-莱布尼兹的积分公式：$$F(b)-F(a) = \int_a^b f(x)dx$$
+也就是说连续型随机变量落在[a,b]区间上的概率就是PDF图像在这个区间上的积分(面积)。\
+另外提一嘴，存在既不是连续型也不是离散型的随机变量。\
+```{r 既不连续也不离散的例子}
+#启发性的例子：投掷一枚硬币，正面朝上X取1，反面朝上X从标准正态分布中随机生成，X的CDF什么样子，X是离散型随机变量或者连续型随机变量嘛？
+myrand <- function(n){
+  binom_result = rbinom(n,1,0.5)
+  norm_result = rnorm(n)
+  final_result = (1 - binom_result) * norm_result + binom_result
+  return(final_result)
+}
+sample <- myrand(1e4)
+e_cdf <- ecdf(sample)
+x = seq(-3,3,0.01)
+plot(x,e_cdf(x),type = 'l')
+```
+
+**注意：这门课只要求大家了解这些结论就足矣，背后的数学道理留给感兴趣的同学。**
+
+#### 一般正态分布的计算
+
+```{r 课后思考题的解答}
+norm_1 <- function(a = -Inf,b = Inf, mu = 0, sd = 1, lim = 3, digits = 3,col = 'lightgreen'){
+  p = pnorm(b, mu, sd)-pnorm(a, mu, sd)
+  x = seq(mu-lim*sd,mu + lim * sd, by = sd/100)
+  main = paste('P (',round(a,digits),'< X <',round(b,3),') =',round(p,digits))
+  plot(x,dnorm(x, mu, sd),type = 'l', main = main,lwd = 2)
+  seg = seq(max(-mu-sd*lim,a),min(mu+sd*lim,b), by = sd/100)
+  segments(seg,0,seg,dnorm(seg,mu,sd),col = col)
+}
+
+#一般正态分布
+#IQ是服从N(100,15^2)的正态分布
+mu = 100
+sd = 15
+
+#pnorm，qnorm，rnorm类似
+
+#Q1:绘制IQ总体分布的PDF和CDF
+X = seq(mu-3*sd, mu + 3*sd, sd/10)
+plot(X, dnorm(X, mu, sd), 'l', main = 'pdf of X', ylab = 'pdf')
+plot(X, pnorm(X, mu, sd), 'l', main = 'cdf of X', ylab = 'cdf')
+
+#Q2:人群中IQ在130以上的所占比例？
+norm_1(a = 130, mu = mu, sd = sd)
+
+#Q3:人群中IQ在90-110之间的所占比例？
+norm_1(a = 90, b = 110, mu = mu, sd = sd)
+
+#Q4:最高的10%IQ处于什么区间?
+norm_1(a = qnorm(0.9,mu,sd), mu = mu, sd = sd)
+
+#Q5:95%的人IQ在什么区间呢？
+norm_1(a = qnorm(0.025, mu, sd), b = qnorm(0.975, mu, sd), mu = mu, sd = sd)
+```
+```{r 另一个有帮助的函数}
+norm_2 <- function(alpha = 0.05, mu = 0, sd = 1, lim = 3, digits = 3,col = 'red'){
+  a = qnorm(alpha/2, mu, sd)
+  b = qnorm(1-alpha/2, mu, sd)
+  x = seq(mu - lim * sd, mu + lim * sd, by = sd/100)
+  main = paste('two-tailed rejection area: X<',round(a,digits),'or X >',round(b, digits),' alpha = ',alpha)
+  plot(x,dnorm(x, mu, sd),type = 'l', main = main,lwd = 2)
+  seg = c(seq(mu-lim*sd, a, by = sd/100),seq(b, mu+lim*sd, by = sd/100))
+  segments(seg,0,seg,dnorm(seg,mu,sd),col = col)
+}
+norm_2(0.10)
+#思考题：你能不能自己写一个适用于单尾检验拒绝域的函数呢？
+
+
+
+```
+
+#### 正态型检验
+要求了解概念，会看结果
+```{r 正态型检验}
+
+##先码在这里，之后能用到
+#偏度
+x = rchisq(100,5)
+hist(x)
+library(moments)
+skewness(x)
+#skew = E((X-EX)^3)/(DX)^(3/2)
+n = length(x)
+skew = sum((x - mean(x))^3)/n/(sum((x - mean(x))^2)/n)^(3/2)
+skew == skewness(x)
+
+#agostino.test是对称性检验
+agostino.test(x)
+
+u = runif(100, -1,1)
+hist(u)
+agostino.test(u)
+
+z = rnorm(100,0,1)
+hist(z)
+agostino.test(z)
+
+#正态性检验-shapiro
+##原理感兴趣可以自己查
+library(stats)
+shapiro.test(u)
+shapiro.test(z)
+
+#正态型检验-KS检验
+# ks.test()比较两个分布的CDF
+ks.test(z,'pnorm')
+ks.test(u,'pnorm')
+ks.test(z,u)
+
+n2 = rnorm(100,100,15)
+hist(n2)
+ks.test(n2,'pnorm')
+ks.test(n2,'pnorm',mean(n2),sd(n2)) #正确的
+
+norm_test <- function(x){
+  z = seq(-3,3,0.01)
+  mu = mean(x)
+  sd = sd(x)
+  x_cdf <- ecdf(x)
+  plot(sort(x),x_cdf(sort(x)),'l', main = 'CDF comparasion')
+  lines(mu+sd*z, pnorm(mu+sd*z,mu,sd),col = 'red')
+  ks.test(x,'pnorm',mu,sd)
+}
+norm_test(z)
+norm_test(u)
+```
+
+### 样本均值分布
+#### 取样误差
+```{r 取样误差}
+#population distribution来自N(0,1)的总体
+mu = 0
+sd = 1
+x = seq(-4,4,0.01)
+plot(x,dnorm(x, mu, sd), type = 'l', ylim = c(0,0.6),
+     main = 'population distribution', lwd = 2, col = 'darkblue')
+abline(v = 0, lty = 2, col = 'darkblue')
+
+#sample distribution是从总体中的随机抽样
+samplesize = 16
+one_sample = rnorm(samplesize)
+sample_pdf = density(one_sample)
+lines(sample_pdf$x, sample_pdf$y, 'l', lwd = 1, col = 'lightblue')
+abline(v = mean(one_sample), lty = 2, col = 'lightblue')
+legend('topright', c('population', 'sample'),fill = c('darkblue', 'lightblue'))
+#(1)什么是抽样误差
+#(2)样本量越大越有代表性
+```
+
+#### 样本均值分布
+$$X_1, X_2, ..., X_n \ i.i.d.，X_i \sim N(\mu, \sigma^2)$$
+$$S_n = X_1 + X_2 + ... + X_n \sim N(n\mu, n\sigma^2)$$
+$$M = \frac1n S_n \sim N(\mu, \frac{\sigma^2}{n})$$
+```{r 样本均值分布}
+#sample mean distribution
+mu = mu
+se = sd/sqrt(samplesize) 
+plot(x,dnorm(x,mu,se), type = 'l', lwd = 2, col = 'darkgreen')
+lines(x,dnorm(x,mu,sd), lwd = 2, col = 'darkblue')
+legend('topright', c('population', 'sample mean distribution'),fill = c('darkblue', 'darkgreen'))
+```
+
+#### 样本的均值
+我们认为：具有相同分布的随机变量可以看作是等价的；\
+M（样本均值）是根据一组样本$(X_1, X_2, ..., X_n)$计算均值得到的统计量，它的分布就是样本均值分布\
+但是我们也可以将其看作一个新的随机变量，直接来自于样本均值分布。
+```{r}
+#考虑所有样本量为10的样本，我们抽取很多次1e4
+iteration = 16
+samples <- replicate(iteration, rnorm(samplesize)) 
+#对每个样本求均值，得到很多个样本均值
+sample_means <- apply(samples,2,mean)
+#样本均值分布
+samplemean_pdf = density(sample_means)
+mean(sample_means)
+sd(sample_means)  #1/sqrt(10)
+plot(x,dnorm(x,mu,se), type = 'l', lwd = 2, col = 'darkgreen')
+lines(samplemean_pdf$x, samplemean_pdf$y, col = 'green')
+legend('topright', c('sample mean distribution', 'sample of sample mean'),fill = c('darkgreen', 'green'))
+```
+#### 为什么选择样本的均值
+```{r}
+#假设一次考试之后每个人的分数服从均值mu=60，标准差是2的正态分布
+#如果我们随机抓一个人看看他的成绩，这个成绩和mu相差不到1分的概率是多少呢?
+pnorm(61, 60, 2) - pnorm(59, 60, 2)
+
+#如果我们随机抓四个人看看他们的平均成绩，这个成绩和mu相差不到1分的概率是多少呢?
+pnorm(61, 60, 1) - pnorm(59, 60, 1)
+
+#如果我们随机抓100个人看看他们的平均成绩，这个成绩和mu相差不到1分的概率是多少呢?
+pnorm(61, 60, 0.2) - pnorm(59, 60, 0.2)
+
+
+```
+
+### z检验
+#### z检验-手算
+
+Step1虚无假设：我们的样本是来自均值为$\mu_0$，标准差为$\sigma$的正态分布总体;\
+z检验的检验对象：均值是不是$\mu_0$;\
+z检验的默认前提：样本来自正态分布的总体，标准差$\sigma$是已知的;\
+Step1.5样本均值分布：H0成立的条件下，M服从均值是$\mu_0$,标准差为$\frac{\sigma}{\sqrt{n}}$的正态分布;\
+Step2拒绝域：结合H0和显著性水平alpha确定拒绝域;\
+Step3计算统计量：z检验中是样本均值分布的z分数;\
+Step4得出结论：接受或者拒绝H0。\
+
+#### z检验-BSDA::z.test
+
+```{r z.test函数}
+library(BSDA)
+?z.test
+x <- c(1,2,3,4,5)
+z.test(x, #放入我们的样本
+       alternative = 'two.sided', #备择假设'two.sided','greater','less'
+       mu = 2, #mu0
+       sigma.x = 2, #sigma
+       conf.level = 0.95 #alpha level
+       )
+#stats包没有专门进行z检验的函数，可见这个检验不是很常见
+#主要就是个承上（样本均值分布，概率）启下（假设检验）的东西吧
+#未来这门课程的学习：从自己按照原理算到调用函数
+#在实际的心理学研究中，p值比拒绝域方法更常用
+```
+
+#### 自制的z_test函数
+```{r 待完善的一个z_test函数}
+#hypo1:one sample z_test
+z_test <- function(x,
+                   alternative = c("two.sided", "less","greater"),
+                   mu0 = 0, #H0假设的总体均值
+                   sigma = 1, #假定总体均值
+                   alpha = 0.05, #第一类错误概率
+                   mu1 = 1, #H1假设的总体均值
+                   powerful = FALSE, #是否计算第二类错误
+                   rejection_area = TRUE, #是否绘制拒绝域
+                   confident_interval = FALSE #是否绘制置信区间
+                   ){
+  
+  ##计算统计量
+  method = "one sample Z test"
+  n = length(x) #样本量
+  sd = sd(x) #样本标准差
+  se = sigma/sqrt(n) #样本标准误
+  mean = mean(x) #样本均值
+  z = (mean-mu0)/se #z分数
+  cohen_d = (mean-mu0)/sigma #effectsize
+  mu1 = mean(x)
+  ##寻找拒绝域（上）
+  lambda1 = qnorm(1-alpha/2) #双尾拒绝域的宽度
+  lambda2 = qnorm(1-alpha) #单尾拒绝域的宽度
+  
+  beta = NULL 
+  power = NULL
+
+  ##双尾检验
+  if (alternative == "two.sided" | alternative == 't'){
+    #H0，H1假设的提出
+    null.hypo = paste("H0: population mu is equal to",mu0)
+    alternative.hypo = paste("H1: population mu is not equal to",mu0)
+    
+    #计算p值
+    p= min(2-2*pnorm(z),2*pnorm(z))
+    #置信区间
+    conf.min = mean - se * lambda1
+    conf.max = mean + se * lambda1
+    #拒绝域
+    reject.min = mu0 - se * lambda1
+    reject.max = mu0 + se * lambda1
+    
+    #第二类错误beta以及检验力power计算
+    if (powerful){
+      beta = pnorm(reject.max, mu1, se)- pnorm(reject.min, mu1, se) 
+      power = 1 - beta
+    }
+  }
+  
+  ##单尾（大于等于）
+  if (alternative == "greater" | alternative == 'g'){
+    #H0，H1的提出
+    null.hypo = paste("H0:population mu is smaller(not greater) than",mu0)
+    alternative.hypo = paste("H1:population mu is greater than",mu0)
+    #计算p值
+    p= 1-pnorm(z)
+    #置信区间
+    conf.min = mean - se * lambda2
+    conf.max = Inf
+    #拒绝域
+    reject.min = mu0 + se * lambda2
+    reject.max = Inf
+    
+    ##第二类错误以及power计算
+    if (powerful){
+      beta = pnorm(reject.min, mu1, se)
+      power = 1 - beta
+    }
+  }
+  
+  ##单尾（小于等于）
+  if (alternative == "less" | alternative == 'l'){
+    #H0，H1的提出
+    null.hypo = paste("H0:population mu is greater(not smaller) than",mu0)
+    alternative.hypo = paste("H1:population mu is smaller than",mu0)
+    #计算p值
+    p= pnorm(z)
+    #置信区间
+    conf.max = mean + se * lambda2
+    conf.min = -Inf
+    #拒绝域
+    reject.min = -Inf
+    reject.max = mu0 - se * lambda2 
+    
+    ##第二类错误以及power计算
+    if (powerful){
+      beta = 1-pnorm(reject.max, mu1, se)
+      power = 1 - beta
+    }
+
+  }
+             
+  
+  #结果报告   
+  if (p<alpha){result = paste('p=',round(p,3),'<',alpha, 'reject H0')}
+  if (p>=alpha){result = paste('p=',round(p,3),'>',alpha, 'do not reject H0')}
+  word = paste(method, null.hypo, alternative.hypo, result, sep = '\n')
+  print(cat(word))
+  
+  ##作图(拒绝域版本)
+  par(mfrow = c(1,rejection_area + confident_interval))
+  if (rejection_area){
+  minimum = min(mean,mu0-3*se)-2*se
+  maximum = max(mean, mu0+3*se)+2*se
+  x1 = seq(minimum, maximum, by = sigma/100)
+  plot(x1, dnorm(x1,mu0, se), 'l',
+       xlab = 'value', ylab = 'density')
+  if(alternative =='two.sided' | alternative =='t'){
+    x2 = c(seq(minimum,max(minimum,reject.min),by = sigma/100),
+           seq(min(reject.max,maximum),maximum,by = sigma/100))
+  }
+  else{x2 = seq(max(minimum,reject.min),min(maximum, reject.max), by = sigma/100)}
+  segments(x2,0,x2,dnorm(x2,mu0, se),col = 'pink',lwd = 2)
+  abline(v = c(mu0,mean), col = c('grey','blue'),lty = c(2,1),lwd = 2)
+  legend('topright',c('rejection region','sample mean','population mu'),
+         col = c('pink','blue','grey'),lty = c(0,1,2), pch = c(15,15,15),cex = 0.5)
+}
+  ##作图(置信区间版本)  
+  if (confident_interval){
+  plot(x1, dnorm(x1,mu0, se), 'l',
+       xlab = 'value', ylab = 'density')
+  x2 = seq(max(minimum,conf.min), min(maximum, conf.max), by = sigma/100)
+  segments(x2,0,x2,1, col = 'yellow',lwd = 2)
+  abline(v = c(mu0,mean), col = c('grey','blue'),lty = c(2,1),lwd = 2)
+  legend('topright',c('confidence interval','sample mean','population mu'),
+         col = c('yellow','blue','grey'),lty = c(0,1,2), pch = c(15,15,15),cex = 0.5)
+  par(mfrow = c(1,1))
+}
+  #存储的更精细的细节
+  z_test = list(statistic = c(z = z), p.value = p, 
+                cohen_d = cohen_d,
+                conf.int = c(conf.min, conf.max),
+                reject.int = c(reject.min, reject.max),
+                estimate = c(mean = mean, sd = sd),
+                power = c(beta = beta, power = power),
+                null.hypo = null.hypo,
+                alternative.hypo = alternative.hypo) 
+}
+```
+
+```{r 使用自制的z_test函数}
+##应用举例
+sample = c(0,1,1,2,3,4,0,4,2,4,7)
+testresult <- z_test(x = sample,
+       alternative = "g",
+       mu0 = 1, sigma = 1,
+       alpha = 0.05,
+       powerful = T, mu1 = 3)
+testresult
+```
+
+#### power的计算
+power = P(正确拒绝H0) = P(拒绝H0|H1成立)，是一个条件概率；\
+统计量服从H1的分布，落在H0规定的拒绝域的概率。\
+```{r 手算power}
+sigma = 1
+mu0 = 0
+mu1 = 1
+alpha = 0.05
+x = seq(-3,3,by = 0.01)
+plot(x, dnorm(x,mu0,sigma), 'l')
+lines(x, dnorm(x, mu1, sigma), col ='blue')
+lambda = qnorm(0.975)
+seg = c(seq(-3,-lambda, by = 0.02), seq(lambda, 3, 0.02))
+abline(v = c(-lambda, lambda),col = 'grey', lwd = 2)
+segments(seg, 0, seg, dnorm(seg, mu0, sigma), col = 'red')  #第一类错误
+segments(seg, 0, seg, dnorm(seg, mu1, sigma), col = 'green') #power
+#norm_2(0.05)
+```
+
+```{r pwr包简介}
+#install.packages('pwr')
+library(pwr)
+##从理论上，给定检验类型（z检验，t检验等等）和方向性（双尾，大于，小于）
+##效应量d，样本量n，显著性水平alpha，检验力power四个值已知任意三个都是可以计算的
+##pwr做的事情就是给定其中三个值，自动补全空缺的第四个值
+##我个人理解，我们一般只做计算power和估计所需样本量两件事
+
+#我们以z检验为例，使用pwr.norm.test函数
+
+#（1常用）已知d，n，alpha，计算检验力power
+pwr.norm.test(d=,n=9,sig.level=0.05,alternative = 'g')
+#（2常用）已知d，n，power，计算最少样本量n
+pwr.norm.test(d=2/3,power=0.8,sig.level=0.05,alternative = 'g')
+#（3一般）已知d，n，power，计算alpha（没想到有啥用）
+pwr.norm.test(d=2/3,n=10,power=0.8,sig.level = NULL, alternative = 'g')
+#（4一般）已知alpha，n，power，计算效应量d（没想到有啥用）
+pwr.norm.test(d=NULL,n=10,power=0.8, sig.level =0.05, alternative = 'g')
+
+```

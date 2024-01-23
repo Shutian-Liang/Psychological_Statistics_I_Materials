@@ -1,0 +1,161 @@
+---
+title: "t检验"
+author: "Shutian"
+date: "2023/11/01"
+output:   
+  prettydoc::html_pretty:
+    theme: cayman
+    hightlight: github
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(car) #leveneTest(方差同质性)
+```
+
+## t检验概览
+
+1.  单样本t检验(one sample t test)
+2.  配对样本t检验(paired sample t test)
+3.  独立样本t检验(independent sample t test)
+4.  基本步骤：
+- 确定虚无假设和备择假设(注意是单向还是双向)
+- 检验一些前提条件(可能需要)
+- 确定拒绝域
+- 计算统计量
+- 比较统计量与拒绝域，做出结论
+
+### 单样本t检验
+
+(a)适用条件：比较样本均值和总体均值是否存在差异(总体均值已知，标准差未知)\
+注：此后部分尽量不给大家数学计算的过程，大家可以根据ppt上的公式进行手推，t检验以及之后anova直接调包就好\
+(b)实现方式：
+```{r one sample t test}
+#t.test的解说
+#t.test(x = 样本1,
+#       y = 样本2（单样本t检验不需要）,
+#       alternative = 备择假设, c('t','g','l')
+#       mu = 虚无假设的均值（只有单样本t检验需要）,
+#       paried = 是否为配对样本（单样本t检验不需要,对于配对样本t检验或独立样本t检验需要）,
+#       var.equal = 方差同质性是否满足（只有独立样本t检验需要
+#       conf.level = 置信区间估计的置信度，1 - alpha level)
+#output
+#title检验类型
+#data：数据集是什么
+#统计量，自由度，p值
+#备择假设
+#样本均值
+
+set.seed(1101)
+A = rnorm(10,1,1)
+mu0 = 0
+alpha = 0.05
+tresult = t.test(A, mu = mu0, alternative = 'two.sided', conf.level = 1-alpha)
+tresult
+```
+
+(c)报告方式：**使用单样本t检验，$t(9)=1.767.,p=.111**(如果要求效应量一并报告出)\
+
+
+
+### 配对样本t检验(paired sample t test)
+
+(a)适用条件：比较样本均值和样本均值是否存在差异(总体均值已知，标准差未知)\
+(b)实现方式：
+```{r paired sample t test}
+set.seed(1101)
+A = rnorm(10,1,1)
+B = rnorm(10,2,1)
+tresult = t.test(A, B, paired = TRUE,alternative = 'two.sided', conf.level = 1-alpha)
+tresult
+```
+(c)报告方式：**使用配对样本t检验，$t(9)=-2.8294.,p=.020 < .05**(如果要求效应量一并报告出)\
+
+### 独立样本t检验(Independent sample t test)
+
+(a)适用条件：
+(b)公式：$$X\sim N(\mu_1,\sigma^2), Y\sim N(\mu_2,\sigma^2), \overline X\sim N(\mu_1,\frac{\sigma^2}{n_1}),\overline Y\sim N(\mu_2, \frac{\sigma^2}{n_2}),\overline X-\overline Y\sim(\mu_1-\mu_2,\sigma^2(\frac1{n_1}+\frac1{n_2}))$$
+(c)实现方式：
+```{r independent sample t test前提假设}
+set.seed(1101)
+A = rnorm(10,1,1)
+B = rnorm(10,2,1.02)
+
+# 需要查看方差是否同质，可以使用car包里的leveneTest函数
+# leveneTest(
+#           y 可以是一个一个向量也可以是一个法则
+#           group: 对y分组的方式
+#           center: 计算离差标准的方式，并不是很重要，默认就行
+#           data: 一般我们有的数据是dataframe的形式，所以指定dataframe的名字
+#)
+# output
+# title
+# group对应统计量
+# 注意p > 0.05认为方差同质，如果p < 0.05认为方差不同质
+
+# 这里levetest使用需要注意,不能直接放入A，B
+leveneTest(A,B)
+
+# method 1 当我们有两个向量时
+leveneTest(c(A,B),factor(c(rep('man',length(A)),rep('woman',length(B)))))
+
+# method 2 更一般的情况，我们的数据更喜欢以dataframe的形式呈现
+data1 = data.frame(value = c(A,B),
+                label = factor(c(rep('man',length(A)),rep('woman',length(B)))))
+
+with(data1,leveneTest(value, group = label))
+leveneTest(value ~ label,data = data1)
+```
+**如何报告：使用leveneTest，$F(1,18)=.2924,p=.5953$, 可以认为两组方差同质**
+
+```{r independent sample t test}
+# 传入的是向量时
+t.test(x = A,
+       y = B,
+       alternative = 'two.sided',
+       paired = FALSE,
+       var.equal = TRUE)
+
+# 当然也可以选择传入数据框
+t.test(value~label,alternative = 'two.sided',
+       paired = FALSE,
+       var.equal = TRUE,data=data1)
+```
+
+**如何报告：使用独立样本t检验（方差同质），$t(18)=-3.4659,p<.001,r^2=0.041$**
+
+```{r 独立样本t检验方差不同质}
+A = rnorm(10,1,0.2)
+B = rnorm(10,5,3)
+data2 = data.frame(value = c(A,B),
+                label = factor(c(rep('man',length(A)),rep('woman',length(B)))))
+leveneTest(value ~ label,data = data2)
+```
+```{r}
+# 当然也可以选择传入数据框
+t.test(value~label,alternative = 'two.sided',
+       paired = FALSE,
+       var.equal = FALSE,data=data2) #这里换成FALSE
+```
+
+
+### 这次作业可能涉及的anova(下次课细讲)
+```{r}
+Treat1 = c(4,3,6,3,4)
+Treat2 = c(0,1,3,1,0)
+Treat3 = c(1,2,2,0,0)
+
+n1 = length(Treat1)
+n2 = length(Treat2)
+n3 = length(Treat3)
+
+data = data.frame(group = c(rep('Treat1',n1),rep('Treat2',n2),rep('Treat3',n3)),
+                  performance = c(Treat1,Treat2,Treat3))
+data
+```
+
+```{r}
+result <- aov(performance~group, data = data)
+anova(result)
+```
+
